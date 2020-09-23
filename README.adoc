@@ -1,0 +1,69 @@
+= WireGuard HA
+:toc:
+:toclevels: 5
+:imagesdir: ./docs/images
+
+== Purpose
+
+Due to WireGuard nature, there cannot be two WireGuard servers simultaneously connected to the net and forwarding the same subset of traffic in terms of safety. For example, having this configuration:
+
+[source]
+----
+[Interface]
+Address = 10.0.0.2
+PrivateKey = AAA...
+
+[Peer]
+Endpoint = 11.0.0.2:1500
+PublicKey = YYY...
+AllowedIps = 10.0.0.0/24
+PersistentKeepalive = 5
+
+[Peer]
+Endpoint = 11.0.0.3:1500
+PublicKey = WWW...
+AllowedIps = 10.0.0.0/24
+PersistentKeepalive = 5
+----
+
+and loding it with `wg-quick` gives us the following result when checking for the interface result:
+
+[source]
+----
+~ # wg
+interface: wg0
+  public key: ZZZ...
+  private key: (hidden)
+  listening port: 57522
+
+peer: YYY...
+  endpoint: 11.0.0.2:1500
+  allowed ips: (none)
+  transfer: 0 B received, 148 B sent
+  persistent keepalive: every 5 seconds
+
+peer: WWW...
+  endpoint: 11.0.0.3:1500
+  allowed ips: 10.0.0.0/24
+  transfer: 0 B received, 148 B sent
+  persistent keepalive: every 5 seconds
+----
+
+Focus on endpoint `11.0.0.2:1500`. The allowed ips are `(none)`. The forwarding ips got replaced by second peer with endpoint `11.0.0.3:1500`. This makes sense at the same time it shows us a big problem: if each peer can only have one server that could route all the network traffic, that means that if that server goes down the peers will get disconnected from network too.
+
+For this problem there are two kind of solutions:
+
+. the first solution is to have a peer connected to multiple servers with `different` network routings. For example, a network splitted in 4 zones and each zone managed by a different server.
+. the second solution is to transparently have an HA system that, in case of a server shutdown, a second server could take the place of the turned down server and manage that traffic by itself.
+
+However, the first solution is pretty unmaintainable, as it would require to have in each server configuration all the defined network peers, so we are going to explore the second case: high availability for WireGuard servers.
+
+== Architecture
+
+== Implementing the HA solution
+
+=== Using NGINX
+
+=== Using a custom solution with iptables
+
+== Running and testing the setup

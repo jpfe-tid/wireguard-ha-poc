@@ -1,1 +1,0 @@
-# wireguard-nginx-lb
