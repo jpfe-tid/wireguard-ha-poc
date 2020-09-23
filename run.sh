@@ -117,8 +117,9 @@ function start_wireguard_client {
     -m "${wireguard_client_memory}" \
     --cpus="${wireguard_client_cpus}" \
     -v "$(pwd)/configurations/client.conf:/etc/wireguard/wg0.conf" \
+    -v "$(pwd)/scripts:/root/scripts" \
     --cap-add=NET_ADMIN \
-    "${wireguard_image}" "wg-quick up wg0 && sleep 3600"
+    "${wireguard_image}" "sh /root/scripts/run-client.sh"
 
 }
 

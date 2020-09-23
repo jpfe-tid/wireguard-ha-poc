@@ -1,24 +1,39 @@
 #!/usr/bin/env sh
 
+function prerouting {
+
+  local server="$1"
+  local port="$2"
+
+  echo "PREROUTING -t nat -i eth0 -p udp --dport ${port} -j DNAT --to-destination ${server}:${port}"
+
+}
+
+function postrouting {
+
+  local server="$1"
+
+  echo "POSTROUTING -t nat -o eth1 -p udp --destination ${server} -j SNAT --to-source 12.0.0.2"
+
+}
+
 function add_forward {
 
-  server="$1"
-  port="$2"
+  local server="$1"
+  local port="$2"
 
-  iptables -A FORWARD -p udp --dport "${port}" -d "${server}" -j ACCEPT
-  iptables -A FORWARD -p udp --sport "${port}" -s "${server}" -j ACCEPT
-  iptables -A PREROUTING -t nat -i eth0 -p udp --dport "${port}" -j DNAT --to-destination "${server}:${port}"
+  eval "iptables -A $(prerouting "${server}" "${port}")"
+  eval "iptables -A $(postrouting "${server}")"
 
 }
 
 function delete_forward {
 
-  server="$1"
-  port="$2"
+  local server="$1"
+  local port="$2"
 
-  iptables -D FORWARD -p udp --dport "${port}" -d "${server}" -j ACCEPT
-  iptables -D FORWARD -p udp --sport "${port}" -s "${server}" -j ACCEPT
-  iptables -D PREROUTING -t nat -i eth0 -p udp --dport "${port}" -j DNAT --to-destination "${server}:${port}"
+  eval "iptables -D $(prerouting "${server}" "${port}")"
+  eval "iptables -D $(postrouting "${server}")"
 
 }
 
@@ -26,7 +41,6 @@ main_server="12.0.0.3"
 backup_servers=( "12.0.0.4" )
 servers=( "${main_server}" ${backup_servers[@]} )
 
-from_address="11.0.0.1"
 port="1500"
 cycle_seconds=5
 
