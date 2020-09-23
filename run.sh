@@ -2,9 +2,9 @@
 
 function create_network {
 
-  network="$1"
-  subnet="$2"
-  gateway="$3"
+  local network="$1"
+  local subnet="$2"
+  local gateway="$3"
 
   # Create the wireguard docker network
   [[ -z "$(docker network ls | grep "${network}")" ]] && docker network create --driver=bridge --subnet="${subnet}" --gateway="${gateway}" "${network}"
@@ -13,7 +13,7 @@ function create_network {
 
 function stop_container {
 
-  container_name="$1"
+  local container_name="$1"
 
   if [[ ! -z "$(docker ps -a | grep ${container_name})" ]]
   then
@@ -33,8 +33,8 @@ function stop_container {
 
 function start_wireguard_server {
 
-  id="$1"
-  name="wireguard-server-${id}"
+  local id="$1"
+  local name="wireguard-server-${id}"
 
   # Stop previous server
   stop_container "${name}"
@@ -56,7 +56,7 @@ function start_wireguard_server {
 
 function start_nginx_server {
 
-  name="balancer"
+  local name="balancer"
 
   # Stop previous server
   stop_container "${name}"
@@ -81,7 +81,7 @@ function start_nginx_server {
 
 function start_balancer_server {
 
-  name="balancer"
+  local name="balancer"
 
   # Stop previous server
   stop_container "${name}"
@@ -105,7 +105,7 @@ function start_balancer_server {
 
 function start_wireguard_client {
 
-  name="wireguard-client"
+  local name="wireguard-client"
 
   # Stop previous server
   stop_container "${name}"
@@ -120,6 +120,43 @@ function start_wireguard_client {
     -v "$(pwd)/scripts:/root/scripts" \
     --cap-add=NET_ADMIN \
     "${wireguard_image}" "sh /root/scripts/run-client.sh"
+
+}
+
+function run {
+
+  local balancer="$1"
+
+  if [[ "${balancer}" == "iptables" || "${balancer}" == "nginx" ]]
+  then
+
+    # Create the image
+    docker build -q -t "${wireguard_image}" "base/wireguard"
+    docker build -q -t "${balancer_image}" "base/balancer"
+
+    # Check networks are created
+    create_network "${client_network}" 11.0.0.0/24 11.0.0.1
+    create_network "${lb_network}" 12.0.0.0/24 12.0.0.1
+
+    # Run servers
+    if [[ "${balancer}" == "nginx" ]]
+    then
+      start_nginx_server
+    else
+      start_balancer_server
+    fi
+
+    start_wireguard_server 1
+    start_wireguard_server 2
+
+    # Run the client
+    start_wireguard_client
+
+  else
+
+    echo "Balancer type ${balancer} is not allowed. Use one of: [balancer, nginx]"
+
+  fi
 
 }
 
@@ -139,19 +176,4 @@ nginx_server_memory="50m"
 client_network="client"
 lb_network="lb"
 
-# Create the image
-docker build -q -t "${wireguard_image}" "base/wireguard"
-docker build -q -t "${balancer_image}" "base/balancer"
-
-# Check networks are created
-create_network "${client_network}" 11.0.0.0/24 11.0.0.1
-create_network "${lb_network}" 12.0.0.0/24 12.0.0.1
-
-# Run servers
-#start_nginx_server
-start_balancer_server
-start_wireguard_server 1
-start_wireguard_server 2
-
-# Run the client
-start_wireguard_client
+run "$@"
