@@ -50,13 +50,13 @@ function start_wireguard_server {
     --cpus="${wireguard_server_cpus}" \
     -v "$(pwd)/configurations/server.conf:/etc/wireguard/wg0.conf" \
     --cap-add=NET_ADMIN \
-    "${image}" "wg-quick up wg0 && sleep 3600"
+    "${wireguard_image}" "wg-quick up wg0 && sleep 3600"
 
 }
 
 function start_nginx_server {
 
-  name="nginx-lb"
+  name="balancer"
 
   # Stop previous server
   stop_container "${name}"
@@ -66,14 +66,40 @@ function start_nginx_server {
     -it \
     -d \
     --name "${name}" \
-    --network "${lb_network}" \
+    --network "${client_network}" \
     -m "${nginx_server_memory}" \
     --cpus="${nginx_server_cpus}" \
+    --ip "11.0.0.2" \
     -v "$(pwd)/configurations/nginx.conf:/etc/nginx/nginx.conf" \
+    -v "$(pwd)/logs:/logs" \
     "nginx"
 
   # Add the server to the client network
-  docker network connect "${client_network}" "nginx-lb"
+  docker network connect "${lb_network}" "${name}" --ip "12.0.0.2"
+
+}
+
+function start_balancer_server {
+
+  name="balancer"
+
+  # Stop previous server
+  stop_container "${name}"
+
+  # Start the wireguard server
+  docker run \
+    -it \
+    -d \
+    --name "${name}" \
+    --network "${client_network}" \
+    -m "${nginx_server_memory}" \
+    --cpus="${nginx_server_cpus}" \
+    --ip "11.0.0.2" \
+    --cap-add=NET_ADMIN \
+    "${balancer_image}"
+
+  # Add the server to the client network
+  docker network connect "${lb_network}" "${name}" --ip "12.0.0.2"
 
 }
 
@@ -92,13 +118,15 @@ function start_wireguard_client {
     --cpus="${wireguard_client_cpus}" \
     -v "$(pwd)/configurations/client.conf:/etc/wireguard/wg0.conf" \
     --cap-add=NET_ADMIN \
-    "${image}" "wg-quick up wg0 && ping 10.0.0.1"
+    "${wireguard_image}" "wg-quick up wg0 && sleep 3600"
 
 }
 
-image_name="wireguard"
+wireguard_image_name="wireguard"
+balancer_image_name="balancer"
 image_tag="dev"
-image="${image_name}:${image_tag}"
+wireguard_image="${wireguard_image_name}:${image_tag}"
+balancer_image="${balancer_image_name}:${image_tag}"
 
 wireguard_server_cpus="1"
 wireguard_server_memory="50m"
@@ -111,14 +139,16 @@ client_network="client"
 lb_network="lb"
 
 # Create the image
-docker build -q -t "${image}" "base"
+docker build -q -t "${wireguard_image}" "base/wireguard"
+docker build -q -t "${balancer_image}" "base/balancer"
 
 # Check networks are created
 create_network "${client_network}" 11.0.0.0/24 11.0.0.1
 create_network "${lb_network}" 12.0.0.0/24 12.0.0.1
 
 # Run servers
-start_nginx_server
+#start_nginx_server
+start_balancer_server
 start_wireguard_server 1
 start_wireguard_server 2
 
